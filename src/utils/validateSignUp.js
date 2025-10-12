@@ -27,6 +27,12 @@ const signUpSchema = z.object({
 })
 .strict();
 
+const loginSchema = z.object({
+    email: z.email()
+        .transform(v => v.trim().toLowerCase()),
+    password: z.string()
+});
+
 
 /**
  * Express middleware function to validate user sign-up request data
@@ -67,4 +73,21 @@ function validateSignUp(req, res, next) {
     next();
 }
 
-module.exports = { validateSignUp };
+function validateLogin(req, res, next) {
+    const result = loginSchema.safeParse(req.body);
+    if (!result.success) {
+        const fieldErrors = result.error.issues.map(i => ({
+            path: i.path.join("."),
+            message: i.message,
+        }));
+        return res.status(400).json({
+            code: "VALIDATON_ERROR",
+            message: "Invalid request body",
+            fieldErrors
+        });
+    }
+    req.body = result.data;
+    next();
+}
+
+module.exports = { validateSignUp, validateLogin };

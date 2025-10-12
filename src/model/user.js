@@ -81,6 +81,12 @@ const userSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true, // Automatically adds createdAt and updatedAt fields
+    toJSON: {
+        transform: (_doc, ret) => {
+          delete ret.passwordHash; // remove sensitive field
+          return ret;
+        }
+      }
 });
 
 /**

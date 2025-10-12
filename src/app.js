@@ -6,7 +6,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const connectDB = require('./config/connectDB');
 const User = require('./model/user');
-const { validateSignUp } = require('./utils/validateSignUp');
+const { validateSignUp, validateLogin } = require('./utils/validateSignUp');
 
 // Initialize Express application
 const app = express();
@@ -59,6 +59,45 @@ app.post("/api/v1/auth/register", validateSignUp, async (req, res) => {
     catch (error) {
         // Handle any errors during user creation (e.g., duplicate email)
         res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+})
+
+app.post("/api/v1/auth/login", validateLogin, async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({
+            email: email
+        }).select("+passwordHash");
+
+        if(!user) {
+            res.status(401).json({
+                code: "AUTHENTICATION_ERROR",
+                message: "Invalid email or password"
+            })
+        } 
+
+        const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
+        if (isPasswordCorrect) {
+            const userObj = user.toObject();
+            delete userObj.passwordHash;
+            res.status(200).json({
+                code: "SUCCESS",
+                message: "Login successful",
+                userObj
+            })
+        }
+        else {
+            res.status(401).json({
+                code: "AUTHENTICATION_ERROR",
+                message: "Invalid email or password"
+            })
+        }
+    }
+    catch(error) {
+        res.status(500).json({
+            code: "SERVER_ERROR",
+            message: "Internal Server Error"
+        });
     }
 })
 
