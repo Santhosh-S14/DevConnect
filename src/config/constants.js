@@ -15,5 +15,6 @@
  * @requires dotenv - Must be configured in the main application file to load .env variables
  */
 module.exports = {
-    MONGODB_URI: process.env.MONGODB_URI // MongoDB connection string from environment variables
+    MONGODB_URI: process.env.MONGODB_URI, // MongoDB connection string from environment variables
+    JWT_SECRET_KEY: process.env.JWT_SECRET_KEY
 }

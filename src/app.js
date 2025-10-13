@@ -4,8 +4,11 @@ require('dotenv').config();
 // Import required dependencies
 const express = require('express');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const connectDB = require('./config/connectDB');
 const User = require('./model/user');
+const { JWT_SECRET_KEY } = require('./config/constants');
 const { validateSignUp, validateLogin } = require('./utils/validateSignUp');
 
 // Initialize Express application
@@ -13,6 +16,7 @@ const app = express();
 
 // Middleware to parse JSON request bodies
 app.use(express.json());
+app.use(cookieParser());
 
 /**
  * POST /api/v1/auth/register - User registration endpoint
@@ -37,22 +41,22 @@ app.use(express.json());
 app.post("/api/v1/auth/register", validateSignUp, async (req, res) => {
     // Extract validated user data from request body
     const { email, password, firstName, lastName } = req.body;
-    
+
     try {
         // Hash the password with bcrypt using salt rounds of 10
         const passwordHash = await bcrypt.hash(password, 10);
-        
+
         // Create new user instance with hashed password
         const user = new User({
-            email, 
-            passwordHash, 
-            firstName, 
+            email,
+            passwordHash,
+            firstName,
             lastName,
         });
-        
+
         // Save user to database
         await user.save();
-        
+
         // Return success response with user data
         res.status(201).json({ message: "User created successfully", user });
     }
@@ -64,22 +68,28 @@ app.post("/api/v1/auth/register", validateSignUp, async (req, res) => {
 
 app.post("/api/v1/auth/login", validateLogin, async (req, res) => {
     const { email, password } = req.body;
+    const accessTokenOptions = {
+        httpOnly: true,
+        maxAge: 2 * 60 * 1000
+    }
     try {
         const user = await User.findOne({
             email: email
         }).select("+passwordHash");
 
-        if(!user) {
+        if (!user) {
             res.status(401).json({
                 code: "AUTHENTICATION_ERROR",
                 message: "Invalid email or password"
             })
-        } 
+        }
 
         const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
         if (isPasswordCorrect) {
             const userObj = user.toObject();
             delete userObj.passwordHash;
+            const accessToken = jwt.sign({ _id: user._id }, JWT_SECRET_KEY);
+            res.cookie("access_token", accessToken, accessTokenOptions);
             res.status(200).json({
                 code: "SUCCESS",
                 message: "Login successful",
@@ -93,11 +103,44 @@ app.post("/api/v1/auth/login", validateLogin, async (req, res) => {
             })
         }
     }
-    catch(error) {
+    catch (error) {
         res.status(500).json({
             code: "SERVER_ERROR",
             message: "Internal Server Error"
         });
+    }
+})
+
+app.get("/api/v1/users/me", async (req, res) => {
+    const token = req.cookies?.access_token;
+    console.log(token);
+    if (!token) {
+        return res.status(401).json({
+            code: "UNAUTHORIZED",
+            message: "Authentication required"
+        })
+    }
+    try {
+        const payload = await jwt.verify(token, JWT_SECRET_KEY);
+        const loggedInUser = await User.findById({
+            _id: payload._id,
+        })
+        if (!loggedInUser) {
+            return res.status(401).json({
+                code: "UNAUTHORIZED",
+                message: "User not found!!"
+            })
+        }
+        res.status(200).json({
+            code: "SUCCESS",
+            user: loggedInUser
+        })
+    }
+    catch (error) {
+        return res.status(401).json({
+            code: "UNAUTHORIZED",
+            message: "Invalid or expired token"
+        })
     }
 })
 
