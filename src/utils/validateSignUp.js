@@ -25,13 +25,36 @@ const signUpSchema = z.object({
         .max(50, "Last name is too long")
         .transform(v => v.trim())
 })
-.strict();
+    .strict();
 
 const loginSchema = z.object({
     email: z.email()
         .transform(v => v.trim().toLowerCase()),
     password: z.string()
 });
+
+const updateUserSchema = z.object({
+    firstName: z.string()
+        .min(5, "First name must be at least 5 characters")
+        .max(50, "First name is too long")
+        .transform(v => v.trim()).optional(),
+    lastName: z.string()
+        .max(50, "Last name is too long")
+        .transform(v => v.trim()).optional(),
+    gender: z.enum(["male", "female", "Others"]).optional(),
+    bio: z.string().max(500, "Bio must be less than 500 characters long").optional(),
+    photos: z.array(z.object({
+        url: z.string(),
+        isPrimary: z.boolean(),
+    })).optional(),
+    dev: z.object({
+        role: z.string(),
+        yearsOfExperience: z.number().min(0).max(50),
+        skills: z.array(z.string()),
+        linkedIn: z.string(),
+        github: z.string(),
+    }).optional()
+})
 
 
 /**
@@ -66,7 +89,7 @@ function validateSignUp(req, res, next) {
             fieldErrors
         });
     }
-    
+
     // Replace req.body with validated and transformed data
     req.body = result.data;
     // Continue to next middleware/route handler
@@ -90,4 +113,29 @@ function validateLogin(req, res, next) {
     next();
 }
 
-module.exports = { validateSignUp, validateLogin };
+function validateUpdateUser(req, res, next) {
+    const allowedFields = ["firstName", "lastName", "gender", "bio", "photos", "dev"];
+    const isValidRequest = Object.keys(req.body).every(key => allowedFields.includes(key));
+    if (!isValidRequest) {
+        return res.status(400).json({
+            code: "VALIDATION_ERROR",
+            message: "Invalid request body",
+        });
+    }
+    const result = updateUserSchema.safeParse(req.body);
+    if (!result.success) {
+        const fieldErrors = result.error.issues.map(i => ({
+            path: i.path.join("."),
+            message: i.message,
+        }));
+        return res.status(400).json({
+            code: "VALIDATION_ERROR",
+            message: "Invalid request body",
+            fieldErrors
+        });
+    }
+    req.body = result.data;
+    next();
+}
+
+module.exports = { validateSignUp, validateLogin, validateUpdateUser };

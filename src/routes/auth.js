@@ -100,5 +100,13 @@ router.post("/login", validateLogin, async (req, res) => {
     }
 });
 
+router.post("/logout", async (req, res) => {
+    res.cookie("access_token", null);
+    res.status(200).json({
+        code: "SUCCESS",
+        message: "Logout successful"
+    });
+});
+
 module.exports = router;
 
