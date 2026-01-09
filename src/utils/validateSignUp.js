@@ -1,3 +1,4 @@
+const { default: mongoose } = require('mongoose');
 const { z } = require('zod');
 
 /**
@@ -55,6 +56,11 @@ const updateUserSchema = z.object({
         github: z.string(),
     }).optional()
 })
+
+const interactionSchema = z.object({
+    toUserId: z.string().refine(v => mongoose.Types.ObjectId.isValid(v), "Invalid user id"),
+    status: z.enum(["interested", "ignored"])
+}).strict();
 
 
 /**
@@ -138,4 +144,21 @@ function validateUpdateUser(req, res, next) {
     next();
 }
 
-module.exports = { validateSignUp, validateLogin, validateUpdateUser };
+function validateInteraction(req, res, next) {
+    const result = interactionSchema.safeParse(req.body);
+    if (!result.success) {
+        const fieldErrors = result.error.issues.map((v) => ({
+            path: v.path.join("."),
+            message: v.message
+        }));
+        return res.status(400).json({
+            code: "VALIDATION_ERROR",
+            message: "Invalid request body",
+            fieldErrors
+        });
+    }
+    req.body = result.data;
+    next();
+}
+
+module.exports = { validateSignUp, validateLogin, validateUpdateUser, validateInteraction };
