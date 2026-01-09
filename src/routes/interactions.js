@@ -2,7 +2,7 @@ const express = require('express');
 const Interactions = require('../model/interaction');
 const { userAuth } = require('../middlewares/auth');
 const User = require('../model/user');
-const { validateInteraction } = require('../utils/validateSignUp');
+const { validateInteraction } = require('../utils/validate');
 
 const router = express.Router();
 

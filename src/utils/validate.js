@@ -62,6 +62,16 @@ const interactionSchema = z.object({
     status: z.enum(["interested", "ignored"])
 }).strict();
 
+const changePasswordSchema = z.object({
+    currentPassword: z.string(),
+    newPassword: z.string()
+        .min(8, "Password must be at least 8 characters")
+        .max(64, "Password must be at most 64 characters"),
+    confirmNewPassword: z.string()
+        .min(8, "Password must be at least 8 characters")
+        .max(64, "Password must be at most 64 characters"),
+}).strict();
+
 
 /**
  * Express middleware function to validate user sign-up request data
@@ -161,4 +171,21 @@ function validateInteraction(req, res, next) {
     next();
 }
 
-module.exports = { validateSignUp, validateLogin, validateUpdateUser, validateInteraction };
+function validateChangePassword(req, res, next) {
+    const result = changePasswordSchema.safeParse(req.body);
+    if (!result.success) {
+        const fieldErrors = result.error.issues.map((v) => ({
+            path: v.path.join("."),
+            message: v.message
+        }));
+        return res.status(400).json({
+            code: "VALIDATION_ERROR",
+            message: "Invalid request body",
+            fieldErrors
+        });
+    }
+    req.body = result.data;
+    next();
+}
+
+module.exports = { validateSignUp, validateLogin, validateUpdateUser, validateInteraction, validateChangePassword };
