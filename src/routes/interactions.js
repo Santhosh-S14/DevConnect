@@ -3,6 +3,7 @@ const Interactions = require('../model/interaction');
 const { userAuth } = require('../middlewares/auth');
 const User = require('../model/user');
 const { validateInteraction } = require('../utils/validate');
+const Match = require('../model/match');
 
 const router = express.Router();
 
@@ -36,10 +37,22 @@ router.post("/", userAuth, validateInteraction, async (req, res) => {
             const reverse = await Interactions.findOne({
                 fromUserId: toUserId,
                 toUserId: fromUserId,
-                status: status
+                status: "interested"
             }).select('_id');
 
             matched = !!reverse;
+            if (matched) {
+                const pairKey = Match.makePairKey(fromUserId, toUserId);
+
+                const match = await Match.findOneAndUpdate(
+                    { pairKey },
+                    {
+                        participants: [fromUserId, toUserId],
+                        active: true,
+                    },
+                    { upsert: true, new: true }
+                )
+            }
         }
         return res.status(200).json({
             message: "Interaction recorded",
