@@ -3,6 +3,8 @@ const bcrypt = require("bcrypt");
 const { userAuth } = require('../middlewares/auth');
 const { validateUpdateUser, validateChangePassword } = require('../utils/validate');
 const User = require('../model/user');
+const Interactions = require('../model/interaction');
+const Match = require('../model/match');
 
 const router = express.Router();
 
@@ -80,6 +82,46 @@ router.patch("/me/password", userAuth, validateChangePassword, async (req, res) 
             message: "Internal Server Error"
         })
     }
+})
+
+router.get("/me/requests/received", userAuth, async (req, res) => {
+    try {
+        const loggedInUser = req.user;
+
+        const interactions = await Interactions.find({
+            toUserId: loggedInUser._id,
+            status: "interested"
+        }).populate("fromUserId", "firstName lastName gender bio dev photos");
+
+        return res.status(200).json({
+            code: "SUCCESS",
+            connectionsReceived: interactions.map(v => v.fromUserId),
+        })
+    }
+    catch (error) {
+        return res.status(500).json({
+            code: "SERVER_ERROR",
+            messsage: "Internal Server Error " + error
+        })
+    }
+});
+
+router.get("/me/connections", userAuth, async (req, res) => {
+    const loggedInUser = req.user;
+
+    const matches = await Match.find({
+        participants: loggedInUser._id,
+        active: true,
+    }).populate("participants", "firstName lastName gender bio dev photos ")
+
+    return res.status(200).json({
+        code: "SUCCESS",
+        matches: matches.map(v =>
+            v.participants.filter(
+                p => p._id.toString() !== loggedInUser._id.toString()
+            )
+        )
+    })
 })
 
 module.exports = router;

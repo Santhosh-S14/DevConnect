@@ -4,7 +4,8 @@ const interactionSchema = new mongoose.Schema({
     fromUserId: {
         type: Schema.Types.ObjectId,
         required: true,
-        index: true
+        index: true,
+        ref: "User"
     },
     toUserId: {
         type: Schema.Types.ObjectId,
