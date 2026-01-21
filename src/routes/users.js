@@ -124,5 +124,38 @@ router.get("/me/connections", userAuth, async (req, res) => {
     })
 })
 
+router.get("/discover", userAuth, async (req, res) => {
+    try {
+        const loggedInUser = req.user;
+
+        const interactions = await Interactions.find({
+            fromUserId: loggedInUser._id
+        }).select("toUserId");
+
+        const usersToHide = new Set();
+        interactions.forEach((req) => {
+            usersToHide.add(req.toUserId);
+        });
+
+        const usersToShow = await User.find({
+            $and: [
+                { _id: { $nin: Array.from(usersToHide) } },
+                { _id: { $ne: loggedInUser._id } }
+            ]
+        }).select("firstName lastName gender bio dev photos")
+
+        res.status(200).json({
+            code: "SUCCESS",
+            feed: usersToShow
+        })
+    }
+    catch (error) {
+        return res.status(500).json({
+            code: "SERVER_ERROR",
+            message: "Internal Server Error " + error
+        })
+    }
+})
+
 module.exports = router;
 
