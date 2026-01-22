@@ -126,6 +126,12 @@ router.get("/me/connections", userAuth, async (req, res) => {
 
 router.get("/discover", userAuth, async (req, res) => {
     try {
+
+        const page = req.query.page;
+        let limit = req.query.limit;
+        limit = limit > 50 ? 50 : limit;
+        const skip = (page - 1) * limit;
+
         const loggedInUser = req.user;
 
         const interactions = await Interactions.find({
@@ -143,6 +149,8 @@ router.get("/discover", userAuth, async (req, res) => {
                 { _id: { $ne: loggedInUser._id } }
             ]
         }).select("firstName lastName gender bio dev photos")
+            .skip(skip)
+            .limit(limit)
 
         res.status(200).json({
             code: "SUCCESS",
