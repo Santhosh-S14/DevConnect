@@ -14,7 +14,7 @@ A Tinder-like app for developers. This is a course project where I'm practicing 
    cd server
    npm install
    ```
-2. Create a `.env` file in the `server` folder:
+2. Create a `.env` file in the `server` folder (see `.env.example`):
    ```bash
    MONGODB_URI=your_mongodb_connection_string
    JWT_SECRET_KEY=your_secret_key
