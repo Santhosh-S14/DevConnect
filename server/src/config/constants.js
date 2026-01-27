@@ -16,5 +16,9 @@
  */
 module.exports = {
     MONGODB_URI: process.env.MONGODB_URI, // MongoDB connection string from environment variables
-    JWT_SECRET_KEY: process.env.JWT_SECRET_KEY
+    JWT_SECRET_KEY: process.env.JWT_SECRET_KEY,
+    JWT_REFRESH_KEY: process.env.JWT_REFRESH_KEY,
+    ACCESS_TOKEN_TTL_MIN: process.env.ACCESS_TOKEN_TTL_MIN,
+    REFRESH_TOKEN_TTL_DAYS: process.env.REFRESH_TOKEN_TTL_DAYS,
+    NODE_ENV: process.env.NODE_ENV,
 }

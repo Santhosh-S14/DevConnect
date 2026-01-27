@@ -1,9 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const crypto = require("crypto")
 const User = require('../model/user');
-const { JWT_SECRET_KEY } = require('../config/constants');
+const Session = require("../model/session");
 const { validateSignUp, validateLogin } = require('../utils/validate');
+const { signAccessToken, signRefreshToken, verifyRefreshToken, refreshTtlDays } = require("../utils/tokens");
+const { hashToken } = require("../utils/sessionCrypto");
+const { setAuthCookies, clearAuthCookies } = require("../utils/cookies");
+const { userAuth } = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -57,55 +61,86 @@ router.post("/register", validateSignUp, async (req, res) => {
 
 router.post("/login", validateLogin, async (req, res) => {
     const { email, password } = req.body;
-    const accessTokenOptions = {
-        httpOnly: true,
-        maxAge: 2 * 60 * 1000
-    }
+    const deviceId = req.headers["x-device-id"] || crypto.randomUUID();
     try {
         const user = await User.findOne({
             email: email
         }).select("+passwordHash");
 
         if (!user) {
-            res.status(401).json({
+            return res.status(401).json({
                 code: "AUTHENTICATION_ERROR",
                 message: "Invalid email or password"
             })
         }
 
         const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
-        if (isPasswordCorrect) {
-            const userObj = user.toObject();
-            delete userObj.passwordHash;
-            const accessToken = jwt.sign({ _id: user._id }, JWT_SECRET_KEY);
-            res.cookie("access_token", accessToken, accessTokenOptions);
-            res.status(200).json({
-                code: "SUCCESS",
-                message: "Login successful",
-                userObj
-            })
-        }
-        else {
-            res.status(401).json({
+        if (!isPasswordCorrect) {
+            return res.status(401).json({
                 code: "AUTHENTICATION_ERROR",
                 message: "Invalid email or password"
             })
         }
+
+        const userObj = user.toObject()
+        delete userObj.passwordHash;
+
+        const expiresAt = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
+
+        const tempSession = await Session.create({
+            userId: user._id,
+            deviceId,
+            userAgent: req.get("user-agent"),
+            ip: req.ip,
+            refreshTokenHash: "temp",
+            expiresAt,
+        });
+
+        const jti = crypto.randomUUID();
+        const refreshToken = signRefreshToken({ userId: user._id, sessionId: tempSession._id, jti });
+        const accessToken = signAccessToken({ userId: user._id, sessionId: tempSession._id });
+
+        tempSession.refreshTokenHash = hashToken(refreshToken);
+        await tempSession.save();
+
+        setAuthCookies(res, accessToken, refreshToken);
+        return res.status(200).json({
+            code: "SUCCESS",
+            message: "Login successful",
+            userObj,
+            deviceId,
+        });
     }
     catch (error) {
         res.status(500).json({
             code: "SERVER_ERROR",
-            message: "Internal Server Error"
+            message: "Internal Server Error",
+            error: error
         });
     }
 });
 
 router.post("/logout", async (req, res) => {
-    res.cookie("access_token", null);
+    if (req.sessionId) {
+        await Session.findByIdAndDelete(req.sessionId);
+    }
+    clearAuthCookies(res);
     res.status(200).json({
         code: "SUCCESS",
         message: "Logout successful"
     });
+});
+
+router.get("/sessions", userAuth, async (req, res) => {
+    const sessions = await Session.find({
+        userId: req.user._id,
+        revokedAt: { $exists: false },
+        expiresAt: { $gt: new Date() },
+    })
+        .sort({ updatedAt: -1 })
+        .select("_id deviceId userAgent ip createdAt updatedAt expiresAt");
+
+    return res.status(200).json({ code: "SUCCESS", sessions });
 });
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET_KEY } = require("../config/constants");
 const User = require("../model/user");
+const { verifyAccessToken } = require('../utils/tokens');
 
 
 const userAuth = async (req, res, next) => {
@@ -12,10 +13,8 @@ const userAuth = async (req, res, next) => {
         })
     }
     try {
-        const payload = await jwt.verify(token, JWT_SECRET_KEY);
-        const loggedInUser = await User.findById({
-            _id: payload._id,
-        })
+        const payload = verifyAccessToken(token);
+        const loggedInUser = await User.findById(payload.sub).select()
         if (!loggedInUser) {
             return res.status(401).json({
                 code: "UNAUTHORIZED",
@@ -23,6 +22,7 @@ const userAuth = async (req, res, next) => {
             })
         }
         req.user = loggedInUser;
+        req.sessionId = payload.sid;
         next();
     }
     catch (error) {
