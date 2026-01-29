@@ -8,6 +8,7 @@ const { signAccessToken, signRefreshToken, verifyRefreshToken, refreshTtlDays } 
 const { hashToken } = require("../utils/sessionCrypto");
 const { setAuthCookies, clearAuthCookies } = require("../utils/cookies");
 const { userAuth } = require('../middlewares/auth');
+const { ref } = require('process');
 
 const router = express.Router();
 
@@ -120,6 +121,60 @@ router.post("/login", validateLogin, async (req, res) => {
     }
 });
 
+router.post("/refresh", async (req, res) => {
+    const token = req.cookies?.refresh_token;
+    if (!token) {
+        return res.status(401).json({
+            code: "UNAUTHORIZED",
+            message: "Authentication required"
+        })
+    }
+    try {
+        const payload = verifyRefreshToken(token);
+        const session = await Session.findById(payload.sid);
+        if (!session) {
+            clearAuthCookies(res);
+            return res.status(401).json({
+                code: "UNAUTHORIZED",
+                message: "This session is not valid. Please sign in again"
+            });
+        }
+
+        if (session.refreshTokenHash !== hashToken(token)) {
+            session.revokedAt = new Date();
+            await session.save();
+            clearAuthCookies(res);
+            return res.status(401).json({
+                code: "UNAUTHORIZED", message: "Session invalid"
+            });
+        }
+
+        const newJti = crypto.randomUUID();
+        const newRefreshToken = signRefreshToken({ userId: payload.sub, sessionId: session._id, jti: newJti });
+        const newAccessToken = signAccessToken({ userId: payload.sub, sessionId: session._id });
+
+        const newRefreshTokenHash = hashToken(newRefreshToken);
+        session.refreshTokenHash = newRefreshTokenHash;
+        session.ip = req.ip;
+        session.userAgent = req.get("user-agent");
+        await session.save();
+
+        setAuthCookies(res, newAccessToken, newRefreshToken);
+        res.status(200).json({
+            code: "SUCCESS",
+            message: "Refreshed"
+        })
+    }
+    catch (error) {
+        clearAuthCookies(res);
+        res.status(401).json({
+            code: "UNAUTHORIZED",
+            message: "Invalid refresh token",
+            error: error
+        })
+    }
+})
+
 router.post("/logout", async (req, res) => {
     if (req.sessionId) {
         await Session.findByIdAndDelete(req.sessionId);
@@ -138,7 +193,7 @@ router.get("/sessions", userAuth, async (req, res) => {
         expiresAt: { $gt: new Date() },
     })
         .sort({ updatedAt: -1 })
-        .select("_id deviceId userAgent ip createdAt updatedAt expiresAt");
+        .select("_id userId deviceId userAgent ip createdAt updatedAt expiresAt");
 
     return res.status(200).json({ code: "SUCCESS", sessions });
 });
